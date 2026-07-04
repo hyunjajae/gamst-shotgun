@@ -239,7 +239,7 @@
     <div class="status" id="micStatus">마이크 감지 대기 중…</div>
     <div class="slider-row">
       <label>감도(값↓ = 예민)</label>
-      <input type="range" id="thresholdSlider" min="0.05" max="0.95" step="0.01" value="0.15" />
+      <input type="range" id="thresholdSlider" min="0.05" max="0.95" step="0.01" value="0.05" />
       <span class="thval" id="thresholdValue">0.05</span>
     </div>
     <div class="meter">
@@ -272,7 +272,7 @@ const CONFIG = {
   // ── 마이크 충격 감지 ──
   MIN_THRESHOLD:     0.05,   // 슬라이더 최소(가장 예민)
   MAX_THRESHOLD:     0.95,   // 슬라이더 최대(가장 둔감)
-  DEFAULT_THRESHOLD: 0.05,   // 기본값 = 가장 예민(=최소)
+  DEFAULT_THRESHOLD: 0.15,   // 기본값 = 가장 예민(=최소)
   COOLDOWN_MS:       250,    // 중복 카운트 방지 쿨다운
 
   // ── 홍명보 세로 압축 ──
