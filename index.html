@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>감스트 샷건 카운터 🥁</title>
+<style>
+  /* =========================================================
+     테마 색상 / 공통 변수
+     ========================================================= */
+  :root{
+    --bg:        #0d0d14;
+    --panel:     #16161f;
+    --panel2:    #1e1e2b;
+    --line:      #2c2c3c;
+    --text:      #f2f2f7;
+    --muted:     #9a9ab0;
+    --accent:    #ff3b6b;
+    --accent2:   #ffd23b;
+    --accent3:   #3bd1ff;
+    --good:      #4ce0a0;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #22222f 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    min-height:100vh;
+    -webkit-tap-highlight-color:transparent;
+    overflow-x:hidden;
+  }
+  .wrap{ max-width:640px; margin:0 auto; padding:16px 14px 32px; }
+
+  /* =========================================================
+     ① 시작 화면 (인트로 오버레이)
+     ========================================================= */
+  #intro{
+    position:fixed; inset:0; z-index:10000;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+    background:radial-gradient(1000px 600px at 50% 20%, #242432, #0d0d14 72%);
+    transition:opacity .42s ease;
+  }
+  #intro.hide{ opacity:0; pointer-events:none; }
+  .intro-card{ text-align:center; max-width:440px; width:100%; }
+  .intro-emoji{ font-size:66px; display:inline-block; animation:drum 1.1s ease-in-out infinite; }
+  @keyframes drum{ 0%,100%{ transform:rotate(-9deg); } 50%{ transform:rotate(9deg); } }
+  .intro-card h1{ font-size:clamp(28px,8vw,46px); margin:6px 0 12px; letter-spacing:-0.5px; }
+  .intro-card h1 span{ color:var(--accent); text-shadow:0 0 18px rgba(255,59,107,.5); }
+  .intro-card p{ color:var(--muted); line-height:1.7; margin:0 0 24px; font-size:15px; }
+  .intro-status{ margin-top:14px; min-height:18px; color:var(--muted); font-size:13px; }
+
+  /* =========================================================
+     헤더 / 점수판
+     ========================================================= */
+  header{ text-align:center; margin-bottom:12px; }
+  header h1{ margin:0; font-size:clamp(20px,5.5vw,30px); letter-spacing:-0.5px; }
+  header h1 .em{ color:var(--accent); text-shadow:0 0 18px rgba(255,59,107,.5); }
+  header p{ margin:5px 0 0; color:var(--muted); font-size:13px; }
+
+  .scoreboard{ display:flex; gap:10px; margin:14px 0; align-items:stretch; flex-wrap:wrap; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px 16px; }
+  .card.today{ flex:1 1 220px; text-align:center; }
+  .card.today .label{ color:var(--muted); font-size:13px; }
+  .card.today .num{
+    font-size:clamp(48px,16vw,86px); font-weight:900; line-height:1;
+    color:var(--accent2); text-shadow:0 0 24px rgba(255,210,59,.35); font-variant-numeric:tabular-nums;
+  }
+  .card.combo{ flex:1 1 200px; display:flex; flex-direction:column; gap:8px; justify-content:center; }
+  .card.combo .top{ display:flex; align-items:baseline; gap:8px; }
+  .card.combo .label{ color:var(--muted); font-size:13px; }
+  .card.combo .cnum{ font-size:28px; font-weight:900; color:var(--accent3); font-variant-numeric:tabular-nums; }
+  .pips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .pip{ width:14px; height:14px; border-radius:50%; background:var(--panel2); border:1px solid var(--line); transition:.12s; }
+  .pip.on{ background:var(--accent); border-color:var(--accent); box-shadow:0 0 10px var(--accent); }
+
+  .rampage-badge{ display:none; align-items:center; gap:6px; margin-top:2px; font-weight:900; color:var(--accent); font-size:14px; letter-spacing:1px; }
+  .rampage-badge.on{ display:inline-flex; animation:blink .25s steps(2) infinite; }
+  @keyframes blink{ 50%{ opacity:.2; } }
+
+  /* =========================================================
+     무대 (영상 + 홍명보 + 이펙트 + 리액션 오버레이)
+     ── 이 요소 자체가 "화면 흔들림"의 대상
+     ========================================================= */
+  .stage{
+    position:relative; background:var(--panel); border:1px solid var(--line);
+    border-radius:18px; padding:16px;
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+  }
+  .media{ width:100%; border-radius:12px; overflow:hidden; position:relative; background:#000; }
+  .video-wrap{ aspect-ratio:16/9; }
+  .hong-wrap{ aspect-ratio:4/3; max-width:360px; }
+  video, .media img{ width:100%; height:100%; object-fit:contain; display:block; background:#000; }
+  .hong-wrap img{ object-fit:cover; }   /* 좌우 검정 여백 없이 박스를 꽉 채움 */
+
+  .placeholder{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; text-align:center; color:#fff; font-weight:800; font-size:clamp(15px,4vw,20px);
+    background:repeating-linear-gradient(45deg,#2a2a3a 0 14px,#22222f 14px 28px);
+    animation:phGlow 2.4s ease-in-out infinite;
+  }
+  .placeholder small{ font-weight:500; color:var(--muted); font-size:12px; }
+  @keyframes phGlow{ 50%{ filter:brightness(1.18); } }
+  .video-wrap .placeholder{ color:var(--accent2); }
+  .hong-wrap  .placeholder{ color:var(--accent3); }
+
+  #hongOuter{ width:100%; height:100%; }
+  #hongInner{
+    width:100%; height:100%; transform-origin:50% 100%;   /* 아래 기준으로 납작해짐 */
+    transition:transform .12s cubic-bezier(.34,1.56,.64,1); will-change:transform;
+  }
+
+  /* ⑤ 리액션 영상: 감스트 영상 박스와 완전히 같은 자리·크기 */
+  #reactionVideo{
+    position:absolute; inset:0; z-index:10; width:100%; height:100%;
+    object-fit:contain; background:#000; display:none;
+  }
+
+  /* =========================================================
+     애니메이션 유틸
+     ========================================================= */
+  @keyframes shakeA{ 0%,100%{transform:translate(0,0);} 20%{transform:translate(-8px,4px);} 40%{transform:translate(7px,-5px);} 60%{transform:translate(-6px,6px);} 80%{transform:translate(6px,-4px);} }
+  .shake{ animation:shakeA .28s; }
+  @keyframes shakeHard{ 0%,100%{transform:translate(0,0) rotate(0);} 15%{transform:translate(-16px,10px) rotate(-2deg);} 30%{transform:translate(15px,-12px) rotate(2deg);} 45%{transform:translate(-14px,12px) rotate(-2deg);} 60%{transform:translate(12px,-10px) rotate(1.5deg);} 75%{transform:translate(-10px,8px) rotate(-1deg);} }
+  .shake-hard{ animation:shakeHard .5s; }
+  @keyframes pulseA{ 0%{transform:scale(1);} 45%{transform:scale(1.05);} 100%{transform:scale(1);} }
+  .pulse{ animation:pulseA .17s; }
+
+  .fly-out{ animation:flyOut .5s ease-in forwards; }
+  .fly-in { animation:flyIn  .5s cubic-bezier(.2,1.3,.4,1); }
+  @keyframes flyOut{ 0%{ transform:translate(0,0) rotate(0); opacity:1; } 100%{ transform:translate(170%,-90%) rotate(760deg); opacity:0; } }
+  @keyframes flyIn{ 0%{ transform:translate(-170%,90%) rotate(-560deg); opacity:0; } 55%{ opacity:1; } 100%{ transform:translate(0,0) rotate(0); opacity:1; } }
+
+  body.rampage{ animation:rampageBg .18s steps(2) infinite; }
+  @keyframes rampageBg{ 50%{ filter:invert(1) hue-rotate(90deg); } }
+  #flash{ position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:9999; }
+  #flash.show{ animation:flashAnim .5s ease-out; }
+  @keyframes flashAnim{ 0%{opacity:.92;} 100%{opacity:0;} }
+
+  /* =========================================================
+     ② 감도 조절 패널
+     ========================================================= */
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-top:14px; }
+  .panel h2{ margin:0 0 12px; font-size:14px; color:var(--muted); font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
+
+  .btn{
+    appearance:none; border:none; cursor:pointer; font-family:inherit; font-weight:800; font-size:16px;
+    color:#fff; background:var(--accent); padding:14px 18px; border-radius:12px; width:100%;
+    transition:.12s; touch-action:manipulation;
+  }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn:active{ transform:translateY(1px) scale(.99); }
+  .btn:disabled{ opacity:.6; cursor:default; }
+  .btn.ghost{ background:var(--panel2); border:1px solid var(--line); color:var(--text); }
+  #startBtn{ font-size:18px; padding:16px 20px; }
+
+  .status{ font-size:13px; color:var(--muted); text-align:center; min-height:18px; margin-bottom:8px; }
+  .status.err{ color:var(--accent); }
+
+  .slider-row{ display:flex; align-items:center; gap:10px; margin-top:6px; }
+  .slider-row label{ font-size:13px; color:var(--muted); white-space:nowrap; }
+  input[type=range]{ flex:1; accent-color:var(--accent); }
+  .thval{ font-variant-numeric:tabular-nums; font-weight:700; color:var(--accent2); min-width:38px; text-align:right; }
+
+  .meter{ position:relative; height:16px; margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .meter-fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,var(--good),var(--accent2),var(--accent)); transition:width .04s linear; }
+  .meter-marker{ position:absolute; top:-3px; bottom:-3px; width:3px; left:5%; background:#fff; box-shadow:0 0 6px #fff; }
+  .meter-cap{ font-size:11px; color:var(--muted); margin-top:6px; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+
+<!-- ========== ① 시작 화면 ========== -->
+<div id="intro">
+  <div class="intro-card">
+    <div class="intro-emoji">🥁</div>
+    <h1>감스트 <span>샷건</span> 카운터</h1>
+    <p>마이크로 <b>책상 치는 소리</b>를 감지해 카운트해요.<br>
+       시작하면 마이크 권한을 물어봐요. (스페이스바로도 가능)</p>
+    <button id="startBtn" class="btn">🎤 시작하기</button>
+    <div class="intro-status" id="introStatus"></div>
+  </div>
+</div>
+
+<!-- ========== 메인(때리는 화면) ========== -->
+<div class="wrap">
+
+  <header>
+    <h1>🥁 감스트 <span class="em">샷건</span> 카운터</h1>
+    <p>책상을 <b>쾅!</b> 칠 때마다 카운트 · 마이크 또는 스페이스바</p>
+  </header>
+
+  <section class="scoreboard">
+    <div class="card today">
+      <div class="label">오늘의 샷건 횟수</div>
+      <div class="num" id="countNum">0</div>
+    </div>
+    <div class="card combo">
+      <div class="top">
+        <span class="label">현재 콤보</span>
+        <span class="cnum" id="comboNum">0</span>
+        <span class="rampage-badge" id="rampageBadge">🔥 광란모드!</span>
+      </div>
+      <div class="pips" id="comboPips"></div>
+    </div>
+  </section>
+
+  <section class="stage" id="stage">
+    <!-- 감스트 샷건 영상 -->
+    <div class="media video-wrap" id="videoStage">
+      <video id="video" playsinline preload="auto"></video>
+      <!-- ⑤ 리액션 영상: 감스트 영상과 같은 자리·같은 크기로 재생 -->
+      <video id="reactionVideo" playsinline preload="auto"></video>
+      <div class="placeholder" id="videoPlaceholder">
+        감스트 샷건 영상
+        <small>assets/gamst.mp4</small>
+      </div>
+    </div>
+
+    <!-- 홍명보 사진 -->
+    <div class="media hong-wrap">
+      <div id="hongOuter">
+        <div id="hongInner">
+          <img id="hongImg" alt="홍명보" />
+          <div class="placeholder" id="hongPlaceholder">
+            홍명보 사진
+            <small>assets/hong1.png ~ hong5.png</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ② 감도 조절 -->
+  <section class="panel">
+    <h2>감도 조절</h2>
+    <div class="status" id="micStatus">마이크 감지 대기 중…</div>
+    <div class="slider-row">
+      <label>감도(값↓ = 예민)</label>
+      <input type="range" id="thresholdSlider" min="0.05" max="0.95" step="0.01" value="0.05" />
+      <span class="thval" id="thresholdValue">0.05</span>
+    </div>
+    <div class="meter">
+      <div class="meter-fill" id="meterFill"></div>
+      <div class="meter-marker" id="meterMarker"></div>
+    </div>
+    <div class="meter-cap"><span>실시간 음량</span><span>흰 선을 넘기면 = 샷건 1회</span></div>
+    <button class="btn ghost" id="resetBtn" style="margin-top:14px;">↺ 오늘 횟수 초기화</button>
+  </section>
+
+</div>
+
+<!-- 광란모드 전체 플래시 -->
+<div id="flash"></div>
+
+<script>
+/* =========================================================================
+   ⚙️  CONFIG — 튜닝 값은 전부 여기서 조절하세요
+   ========================================================================= */
+const CONFIG = {
+  // ── 에셋 경로 ──
+  ASSETS:{
+    video:    'assets/gamst.mp4',          // 감스트 샷건 영상 (원본 소리 그대로 사용)
+    reaction: 'assets/gamstreaction.mp4',  // 콤보(광란모드) 끝난 뒤 재생되는 감스트 리액션
+    hongs:[                                 // 홍명보 사진(여러 장 → 광란모드마다 순환)
+      'assets/hong1.png','assets/hong2.png','assets/hong3.png','assets/hong4.png','assets/hong5.png',
+    ],
+  },
+
+  // ── 마이크 충격 감지 ──
+  MIN_THRESHOLD:     0.05,   // 슬라이더 최소(가장 예민)
+  MAX_THRESHOLD:     0.95,   // 슬라이더 최대(가장 둔감)
+  DEFAULT_THRESHOLD: 0.05,   // 기본값 = 가장 예민(=최소)
+  COOLDOWN_MS:       250,    // 중복 카운트 방지 쿨다운
+
+  // ── 홍명보 세로 압축 ──
+  HONG_COMPRESS_RATIO: 0.88, // 한 번 칠 때마다 곱하는 세로 비율
+  HONG_MIN_SCALE:      0.15, // 하한선
+
+  // ── 콤보 / 광란모드 ──
+  COMBO_GOAL:         10,    // 연속 이만큼 치면 광란모드
+  RAMPAGE_RATE:       2.0,   // 광란모드 영상 배속
+  RAMPAGE_BURSTS:     10,    // "와다다다" 연타 횟수
+  RAMPAGE_STUTTER_MS: 140,   // 연타 간격(ms)
+  REACTION_MAX_MS:    15000, // 리액션 영상 안전 타임아웃(멈춤 대비)
+
+  // ── 저장 ──
+  STORE_KEY: 'gamst_shotgun_counts',
+};
+
+/* =========================================================================
+   상태값
+   ========================================================================= */
+let audioCtx=null, analyser=null, micStream=null, timeData=null;
+let running=false;                         // 마이크 감지 루프 동작 여부
+let started=false;                         // 시작 버튼을 눌러 메인에 진입했는지
+let threshold=CONFIG.DEFAULT_THRESHOLD;    // 현재 감도
+let lastTrigger=0;                         // 마지막 트리거 시각
+let todayCount=0, combo=0;                 // 오늘 횟수 / 현재 콤보
+let isRampage=false;                       // 광란모드 진행중?
+let hongList=[...CONFIG.ASSETS.hongs];     // 홍명보 목록
+let hongIndex=0, hongScaleY=1;             // 현재 사진 / 세로 압축 비율
+let loadDateKey='';                        // 자정 리셋 감지용
+
+/* =========================================================================
+   DOM 캐시
+   ========================================================================= */
+const el={};
+function cacheElements(){
+  ['intro','startBtn','introStatus',
+   'countNum','comboNum','comboPips','rampageBadge','stage',
+   'videoStage','video','videoPlaceholder',
+   'hongOuter','hongInner','hongImg','hongPlaceholder','flash','reactionVideo',
+   'micStatus','thresholdSlider','thresholdValue','meterFill','meterMarker','resetBtn'
+  ].forEach(id=> el[id]=document.getElementById(id));
+}
+
+/* 애니메이션 재시작 헬퍼 */
+function retrigger(node,cls){ node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
+
+/* =========================================================================
+   날짜 & localStorage (날짜별 저장 / 자정 리셋)
+   ========================================================================= */
+function todayKey(){ const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+function getStore(){ try{ return JSON.parse(localStorage.getItem(CONFIG.STORE_KEY)||'{}'); }catch(e){ return {}; } }
+function loadTodayCount(){ return getStore()[todayKey()]||0; }
+function saveTodayCount(n){ const s=getStore(); s[todayKey()]=n; try{ localStorage.setItem(CONFIG.STORE_KEY, JSON.stringify(s)); }catch(e){} }
+function checkDateChange(){
+  const k=todayKey();
+  if(k!==loadDateKey){ loadDateKey=k; todayCount=loadTodayCount(); updateCountUI(); }
+}
+
+/* =========================================================================
+   미디어 로딩 (영상 / 리액션 / 사진 + 플레이스홀더)
+   ========================================================================= */
+function setVideoSource(src){
+  const v=el.video, ph=el.videoPlaceholder;
+  v.onloadeddata=()=>{ v.style.display='block'; ph.style.display='none'; };
+  v.onerror     =()=>{ v.style.display='none';  ph.style.display='flex'; };
+  v.src=src; v.load();
+}
+function setReactionSource(src){
+  const rv=el.reactionVideo;
+  rv.dataset.ok='0';
+  rv.onloadeddata=()=>{ rv.dataset.ok='1'; };  // 파일이 있으면 재생 가능 표시
+  rv.onerror     =()=>{ rv.dataset.ok='0'; };
+  rv.src=src; rv.load();
+}
+function setHongImage(src){
+  const img=el.hongImg, ph=el.hongPlaceholder;
+  if(!src){ img.style.display='none'; ph.style.display='flex'; return; }
+  img.onload =()=>{ img.style.display='block'; ph.style.display='none'; };
+  img.onerror=()=>{ img.style.display='none';  ph.style.display='flex'; };
+  img.src=src;
+}
+// 후보 경로 중 "실제로 존재하는 사진"만 골라 순환 목록을 만든다(3장이든 5장이든 자동 대응)
+function preloadHongs(candidates){
+  return Promise.all(candidates.map(src=> new Promise(resolve=>{
+    const im=new Image();
+    im.onload =()=>resolve(src);
+    im.onerror=()=>resolve(null);
+    im.src=src;
+  }))).then(results=>{
+    const ok=results.filter(Boolean);
+    if(ok.length) hongList=ok;                 // 있는 것만 사용
+    hongIndex=0; hongScaleY=1;
+    el.hongInner.style.transform='scaleY(1)';
+    setHongImage(hongList[0]);
+  });
+}
+
+/* =========================================================================
+   화면 갱신
+   ========================================================================= */
+function updateCountUI(){ el.countNum.textContent=todayCount; }
+function updateComboUI(){
+  el.comboNum.textContent=combo;
+  const pips=el.comboPips.children;
+  for(let i=0;i<pips.length;i++) pips[i].classList.toggle('on', i<combo);
+}
+function buildPips(){
+  el.comboPips.innerHTML='';
+  for(let i=0;i<CONFIG.COMBO_GOAL;i++){ const d=document.createElement('div'); d.className='pip'; el.comboPips.appendChild(d); }
+}
+
+/* =========================================================================
+   영상 재생 (④ 원본 소리 그대로 — 음소거 안 함)
+   ========================================================================= */
+function playVideo(rate=1){
+  const v=el.video;
+  if(v.src && v.style.display!=='none'){
+    try{ v.playbackRate=rate; v.currentTime=0; const p=v.play(); if(p) p.catch(()=>{}); }catch(e){}
+  }
+  retrigger(el.videoStage,'pulse');
+}
+
+/* =========================================================================
+   ⭐ 샷건 1회 처리
+   ========================================================================= */
+function triggerShotgun(){
+  if(!started || isRampage) return;   // 시작 전/광란모드 중엔 무시
+
+  todayCount++; combo++;
+  saveTodayCount(todayCount);
+  updateCountUI(); updateComboUI();
+
+  playVideo(1);                       // 영상 처음부터 재생(원본 소리)
+  compressHong();                     // 홍명보 납작하게
+  retrigger(el.stage,'shake');        // 화면 흔들림
+
+  if(combo>=CONFIG.COMBO_GOAL) enterRampage();  // 10콤보 → 광란모드
+}
+
+function compressHong(){
+  hongScaleY=Math.max(CONFIG.HONG_MIN_SCALE, hongScaleY*CONFIG.HONG_COMPRESS_RATIO);
+  el.hongInner.style.transform=`scaleY(${hongScaleY})`;
+}
+
+/* =========================================================================
+   🔥 광란모드 (⑤ 종료 후 리액션 영상 재생)
+   ========================================================================= */
+async function enterRampage(){
+  isRampage=true;
+  el.rampageBadge.classList.add('on');
+  document.body.classList.add('rampage');   // 색 반전 플리커
+  bigFlash();
+
+  // 홍명보 교체(날아가고→새로 날아옴) + 영상 "와다다다" 동시 진행
+  await Promise.all([ rampageSwapHong(), rapidVideoBurst() ]);
+
+  // 플리커 정리
+  document.body.classList.remove('rampage');
+
+  // 🎬 감스트 리액션 영상 재생 (콤보 피날레)
+  await playReaction();
+
+  // 종료
+  el.rampageBadge.classList.remove('on');
+  combo=0; updateComboUI();
+  isRampage=false;
+}
+
+function bigFlash(){ retrigger(el.flash,'show'); retrigger(el.stage,'shake-hard'); }
+
+// 현재 홍명보 날려버리고 → 압축 리셋된 다음 사진을 날려 들어오게
+function rampageSwapHong(){
+  return new Promise(res=>{
+    const outer=el.hongOuter;
+    const onOut=()=>{
+      hongIndex=(hongIndex+1)%hongList.length;
+      hongScaleY=1; el.hongInner.style.transform='scaleY(1)';
+      setHongImage(hongList[hongIndex]);
+      outer.classList.remove('fly-out'); outer.classList.add('fly-in');   // 같은 프레임에 교체
+      outer.addEventListener('animationend',()=>{ outer.classList.remove('fly-in'); res(); },{once:true});
+    };
+    outer.classList.remove('fly-in');
+    retrigger(outer,'fly-out');
+    outer.addEventListener('animationend', onOut, {once:true});
+  });
+}
+
+// 영상 2배속으로 약 10번 연타 재생("와다다다")
+function rapidVideoBurst(){
+  return new Promise(res=>{
+    let n=0;
+    const step=()=>{
+      playVideo(CONFIG.RAMPAGE_RATE);
+      n++;
+      if(n>=CONFIG.RAMPAGE_BURSTS){ setTimeout(()=>{ el.video.playbackRate=1; },250); res(); return; }
+      setTimeout(step, CONFIG.RAMPAGE_STUTTER_MS);
+    };
+    step();
+  });
+}
+// 감스트 리액션 영상 재생(끝나면 사라짐). 파일이 없으면 그냥 건너뜀.
+function playReaction(){
+  return new Promise(res=>{
+    const rv=el.reactionVideo;
+    if(rv.dataset.ok!=='1'){ res(); return; }
+    rv.style.display='block';
+    try{ rv.currentTime=0; }catch(e){}
+    rv.playbackRate=1;
+    let done=false;
+    const finish=()=>{ if(done) return; done=true; try{ rv.pause(); }catch(e){} rv.style.display='none'; res(); };
+    rv.addEventListener('ended', finish, {once:true});
+    setTimeout(finish, CONFIG.REACTION_MAX_MS);   // 안전장치(영상이 안 끝나도 진행)
+    const p=rv.play(); if(p) p.catch(()=>finish());
+  });
+}
+
+/* =========================================================================
+   🎤 마이크 (Web Audio API) — 성공 시 true 반환
+   ========================================================================= */
+async function startMic(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }});
+  }catch(e){ return false; }
+
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  const source=audioCtx.createMediaStreamSource(micStream);
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=1024; analyser.smoothingTimeConstant=0;   // 순간 스파이크 살리기
+  source.connect(analyser);
+  timeData=new Uint8Array(analyser.fftSize);
+
+  running=true;
+  setMicStatus('마이크 감지 중! 책상을 쾅 쳐보세요 🥁', false);
+  detectLoop();
+  return true;
+}
+function setMicStatus(msg,isErr){ el.micStatus.textContent=msg; el.micStatus.classList.toggle('err', !!isErr); }
+
+function detectLoop(){
+  if(!running) return;
+  analyser.getByteTimeDomainData(timeData);
+  let peak=0;
+  for(let i=0;i<timeData.length;i++){ const v=Math.abs((timeData[i]-128)/128); if(v>peak) peak=v; }
+  el.meterFill.style.width=Math.min(100,peak*100)+'%';
+  const now=performance.now();
+  if(peak>=threshold && now-lastTrigger>CONFIG.COOLDOWN_MS){ lastTrigger=now; triggerShotgun(); }
+  requestAnimationFrame(detectLoop);
+}
+
+/* =========================================================================
+   ① 시작 버튼 → 마이크 요청 → 메인 진입
+   ========================================================================= */
+async function handleStart(){
+  if(started) return;
+  started=true;                       // 이 순간부터 스페이스바/타격 허용
+  el.startBtn.disabled=true;
+  hideIntro();                        // 인트로는 바로 닫아 대기감 없앰
+  const ok=await startMic();          // 마이크는 백그라운드로 연결
+  if(!ok) setMicStatus('마이크를 못 켰어요. 스페이스바로 치면 돼요! ⌨️', true);
+}
+function hideIntro(){
+  el.intro.classList.add('hide');
+  setTimeout(()=>{ el.intro.style.display='none'; }, 460);
+}
+
+/* =========================================================================
+   이벤트 바인딩
+   ========================================================================= */
+function bindEvents(){
+  el.startBtn.addEventListener('click', handleStart);
+
+  el.thresholdSlider.addEventListener('input', e=>{
+    threshold=parseFloat(e.target.value);
+    el.thresholdValue.textContent=threshold.toFixed(2);
+    el.meterMarker.style.left=(threshold*100)+'%';
+  });
+
+  // 스페이스바 = 샷건 1회(백업). 길게 눌러도 1번만.
+  window.addEventListener('keydown', e=>{
+    if(e.code==='Space'){ e.preventDefault(); if(!e.repeat) triggerShotgun(); }
+  });
+
+  el.resetBtn.addEventListener('click', ()=>{
+    if(confirm('오늘의 샷건 횟수를 0으로 초기화할까요?')){
+      todayCount=0; saveTodayCount(0); updateCountUI();
+      combo=0; updateComboUI();
+      hongScaleY=1; el.hongInner.style.transform='scaleY(1)';
+    }
+  });
+}
+
+/* =========================================================================
+   초기화
+   ========================================================================= */
+function init(){
+  cacheElements();
+  buildPips();
+
+  loadDateKey=todayKey();
+  todayCount=loadTodayCount();
+  updateCountUI(); updateComboUI();
+
+  // ② 감도: 가장 예민(최소값)을 기본으로
+  threshold=CONFIG.DEFAULT_THRESHOLD;
+  el.thresholdSlider.min=CONFIG.MIN_THRESHOLD;
+  el.thresholdSlider.max=CONFIG.MAX_THRESHOLD;
+  el.thresholdSlider.value=threshold;
+  el.thresholdValue.textContent=threshold.toFixed(2);
+  el.meterMarker.style.left=(threshold*100)+'%';
+
+  // 에셋 로드 시도(없으면 플레이스홀더)
+  setVideoSource(CONFIG.ASSETS.video);
+  setReactionSource(CONFIG.ASSETS.reaction);
+  preloadHongs(CONFIG.ASSETS.hongs);   // 존재하는 홍명보 사진만 골라 순환
+
+  bindEvents();
+  setInterval(checkDateChange, 30000);
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
